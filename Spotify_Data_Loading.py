@@ -8,6 +8,7 @@ from kaggle.api.kaggle_api_extended import KaggleApi
 import os
 import traceback as tb
 from datetime import datetime as dt
+from sklearn.preprocessing import normalize
 
 def assign_closest_genre_with_time_signature(tracks_df, genre_features_df):
     
@@ -109,6 +110,15 @@ if __name__ == '__main__':
                                                                                    'speechiness': 'mean',
                                                                                    'acousticness':'mean',
                                                                                    'tempo':'mean'}).reset_index()
+
+            # Columns to standardize
+            columns_to_normalize = ['energy', 'speechiness', 'acousticness', 'tempo']
+            
+            # Compute L2 norms for the selected columns
+            l2_norms_gen = np.linalg.norm(genre_grp_df[columns_to_normalize], axis=1, keepdims=True)
+            
+            # Apply L2 normalization to the selected columns since it retains direction necessary for Cosine Similarity
+            genre_grp_df[columns_to_normalize] = normalize(genre_grp_df[columns_to_normalize], norm='l2')
             
             #Retrieve Tracks Data by removing the genre column
             tracks_df = df_clean.iloc[:,:-1]
@@ -129,8 +139,18 @@ if __name__ == '__main__':
             tracks_df['scale'] = tracks_df['key'].map(key_dict)
             
             tracks_df['key_signature'] = np.where(tracks_df['mode'] == 0, tracks_df['scale'] + " Minor", tracks_df['scale'] + " Major")
+
+            # Compute L2 norms for the selected columns
+            l2_norms_trk = np.linalg.norm(tracks_df[columns_to_normalize], axis=1, keepdims=True)
+            
+            # Apply L2 normalization to the selected columns since it retains the direction necessary for Cosine Similarity
+            tracks_df[columns_to_normalize] = normalize(tracks_df[columns_to_normalize], norm='l2')
             
             tracks_df = assign_closest_genre_with_time_signature(tracks_df, genre_grp_df)
+
+            # Denormalize the genre table and the track data frames
+            tracks_df[columns_to_normalize] = tracks_df[columns_to_normalize] * l2_norms_trk
+            genre_grp_df[columns_to_normalize] = genre_grp_df[columns_to_normalize] * l2_norms_gen
 
             ################################################################################
             ## Data Normalization
